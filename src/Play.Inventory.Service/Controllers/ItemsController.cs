@@ -15,13 +15,17 @@ namespace Play.Inventory.Service.Controllers
     public class ItemsController : ControllerBase
     {
         //Making use of our generic repo in Nuget
+        //private readonly IRepository<InventoryItem> _inventoryitemRepository;
         private readonly IRepository<InventoryItem> _itemRepository;
-        private readonly CatLogClient _catalogclient;
+        //
+        // private readonly CatLogClient _catalogclient;//old method
+        private readonly IRepository<CatalogItem> _catalogItemsRepo;//CatLogI _catalogclient;
         //Do the injection
-        public ItemsController(IRepository<InventoryItem> itemRepository, CatLogClient catalogclient)
+        public ItemsController(IRepository<InventoryItem> itemRepository, IRepository<CatalogItem> catalogItems)
         {
             _itemRepository = itemRepository;
-            _catalogclient = catalogclient;
+            //_catalogclient = catalogclient;
+            _catalogItemsRepo = catalogItems;
         }
         [HttpGet]
         public async Task<ActionResult<IEnumerable<InventoryItemDto>>> getAsync(Guid UserId)
@@ -32,6 +36,8 @@ namespace Play.Inventory.Service.Controllers
             }
             else
             {
+
+                /*Old method before calling the catalog items
                 //Note UserId is not in the default _itemRepository.GetAllAsync, but because we tied it 
                 //the readonly repository to it, it uses the InventoryItem Entity
                 //var items = (await _itemRepository.GetAllAsync(itm => itm.UserId == UserId))
@@ -50,7 +56,24 @@ namespace Play.Inventory.Service.Controllers
                     return invenoryitem.AsDto(catlogitem.Name, catlogitem.Description);
                 });
 
-                 return Ok(inventoryItemDtos);
+                return Ok(inventoryItemDtos);
+                 */
+                // var catlogItems = await _catalogclient.GetCataLogItemAsync();
+                var InventoryitemsEntity = await _itemRepository.GetAllAsync(itm => itm.UserId == UserId);
+                //select all inventory items id
+                var itmIds = InventoryitemsEntity.Select(x => x.CataLogItemId);
+                var catlogItems = await _catalogItemsRepo.GetAllAsync(cat => itmIds.Contains(cat.Id));
+                //Combine the two info
+                //InventoryitemsEntity is a subset of catlogItems
+                //loop through all inventory items and add cataloge name and description
+                var inventoryItemDtos = InventoryitemsEntity.Select(invenoryitem =>
+                {
+                    //matching the inventory and catalog ids
+                    var catlogitem = catlogItems.Single(catlogitem => catlogitem.Id == invenoryitem.CataLogItemId);
+                    return invenoryitem.AsDto(catlogitem.Name, catlogitem.Description);
+                });
+
+                return Ok(inventoryItemDtos);
 
             }
         }
